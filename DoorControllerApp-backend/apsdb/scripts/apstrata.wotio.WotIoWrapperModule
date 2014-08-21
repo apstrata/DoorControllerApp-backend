@@ -1,0 +1,65 @@
+<script>
+<scriptACL>
+     <execute>authenticated-users</execute>
+     <read>nobody</read>
+     <write>nobody</write>
+</scriptACL>
+<code><![CDATA[
+
+	/*
+	 * This class wraps the Wot.io platform
+	 * Currently only a stub
+	 * @class WotIoWrapper
+	 * @constructor WotIoWrapper
+	 */
+	function WotIoWrapper(apsdb) {
+	
+		this.apsdb = apsdb;
+	};
+	
+	/*
+	 * Publishes a message to the Wot.io platform
+	 * This method can throw an exception
+	 * @method publish
+	 * @param {Object} publishDTO {message, sinkId, ...}
+	 * @return {Object} publication info {result, ...}
+	 */
+	WotIoWrapper.prototype.publish = function(publishDTO) {
+	
+		return {
+			"result": "success"
+		};
+	};
+	
+	/*
+	 * Subscribes on a source of the Wot.io platform
+	 * This method can throw an exception
+	 * @method publish
+	 * @param {Object} subscribeDTO{sourceId, ...}
+	 * @return {Object} subscription info {result, ...}
+	 */
+	WotIoWrapper.prototype.subscribe = function(subscribeDTO) {
+	
+		return {
+			"result": "success"
+		};
+	}
+	
+	/*
+	 * Consumes next message from a source of the Wot.io platform
+	 * This method can throw an exception
+	 * @method publish
+	 * @param {Object} consumeDTO {sourceId, ...}
+	 * @return {Object} consumption info {result, message...}
+	 */
+	WotIoWrapper.prototype.consume = function(consumeDTO) {
+	
+		return {
+			"result": "success",
+			"message": "hello world"
+		};
+	}
+
+]]>
+</code>
+</script>
