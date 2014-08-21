@@ -1,0 +1,40 @@
+<script>
+<scriptACL>
+     <execute>authenticated-users</execute>
+     <read>nobody</read>
+     <write>nobody</write>
+</scriptACL>
+<code><![CDATA[
+
+	/*
+	 * This script is the main entry point to the process that handles intrusions and is exposed to
+	 * direct calls from end users (including devices)
+	 * It is mainly a wrapper over "apstrata.kinoma.IntrusionManagementModule" to which it forwards
+	 * the received request
+	 */
+	try {
+	
+		var intrusionManagementModule = apsdb.require("apstrata.kinoma.IntrusionManagementModule");
+		var intrusionProcess =  new intrusionManagementModule.IntrusionManagementProcess(apsdb);	
+		var response = intrusionProcess.executeProcess(request);
+		if (response.formattedMsg) {
+			apsdb.httpRespond(response.formattedMsg, "200", {});
+		}
+		
+		return response;
+	}catch(exception) {
+		
+		if (exception.metadata) {
+			return exception;
+		}
+		
+		return {
+		
+			"status": "failure",
+			"errorCode": "ERROR",
+			"errorDetail": exception
+		};
+	}
+]]>
+</code>
+</script>

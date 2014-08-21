@@ -1,0 +1,210 @@
+<script>
+<scriptACL>
+     <execute>authenticated-users</execute>
+     <read>nobody</read>
+     <write>nobody</write>
+</scriptACL>
+<code><![CDATA[
+
+	/*
+	 * Instances of this class handle the execution of the process that is triggered when a device detects 
+	 * a breaking in attempt 
+	 * @class IntrusionManagementProcess
+	 * @constructor IntrusionManagementProcess
+	 */
+	function IntrusionManagementProcess(apsdb) {
+		
+		this.apsdb = apsdb;
+				
+		// Simple workflow definition: associate an event (key) to a function name (value) 
+		// that implements the corresponding workflow step
+		this.workflowSteps = {
+				
+			"intrusionDetected": "sendIntrusionNotification",
+			"intrusionConfirmed": "notifyAllDoorsToLock",
+			"intrusionDiscarded": "sendDiscardConfirmation"
+		};
+		
+		// Get the configuration module 
+		this.config = apsdb.require("apstrata.kinoma.config");
+		
+		// Get a local reference to the utilities modules
+		var utilitiesModule =  apsdb.require("apstrata.kinoma.UtilitiesModule");
+		this.utilities = new utilitiesModule.Utilities(apsdb);
+	}
+	
+	/*
+	 * @method executeProcess
+	 * This method re-throws any exception it receives after logging it (if configured to do so)
+	 * @method sendIntrusionNotification
+	 * @param {Object} request: Apstrative native request object, the request that triggered the execution of the script
+	 * @return {Object} {
+	 * 		{String} stepResult: the outcome of the execution of the current step
+	 *		{String} formattedMsg: a formatted message, targetting human users, if any
+	 * 	}
+	 */
+	IntrusionManagementProcess.prototype.executeProcess = function(request) {
+	
+		// Main logic: retrieve an event from the request parameter, then trigger the corresponding function
+		try {		
+		
+			// Retrieve event name from request parameters
+			var event = request.parameters["event"];
+			
+			// load step from workflowSteps by event name
+			var step = this.workflowSteps[event];
+			
+			// if no matching action found, throw an exception
+			if (!step) {
+				throw {
+					"errorCode": "INVALID_EVENT",
+					"errorDetail": "No action defined for event"
+				}
+			}
+			
+			// execute the function that has name matching the step variable
+			// pass the request object so the workflow step can extract parameters from it if needed
+			var result = this[step](request);
+			return {
+			
+				"executed_step": step,
+				"stepResult": result.stepResult,
+				"formattedMsg": result.formattedMsg
+			}
+		}catch(exception) {
+		
+			if (this.utilities.activateLogs) {
+			
+				this.apsdb.log.setLogLevel(4);
+				this.apsdb.log.debug("exception caught", {"exception":exception});
+			};
+			
+			throw exception;
+		}
+	};
+	
+	/* 
+	 * Workflow step: sends a notification email to the user specified in the configuration
+	 * This method can throw an exception
+	 * @method sendIntrusionNotification
+	 * @param {Object} request: Apstrative native request object, the request that triggered the execution of the script
+	 * @return {Object} {
+	 * 		{String} stepResult: the outcome of the execution of the current step
+	 *		{String} formattedMsg: a formatted message, targetting human users, if any
+	 * 	}	
+	 */
+	IntrusionManagementProcess.prototype.sendIntrusionNotification = function(request) {
+		
+		// Retrieve part of the profile of the user to notify, using the username specified in the configuration
+		var userToNotify = this.utilities.getUser(this.config.userToNotify);
+		
+		// Extract user info from the request in order to retrieve the auth key of the current Apstrata application
+		var userWhoSentTheRequest = this.utilities.parseUserFromRequest(request);
+		var emailParams = {
+		
+			"to": userToNotify.email,
+			"htmlBody": this._buildNotificationMessage(userToNotify, userWhoSentTheRequest.authKey, request.parameters["location"]),
+			"subject": "Breaking in notification"
+		};
+		
+		this.utilities.sendEmail(emailParams);
+		return {
+			
+			"stepResult": "notification_email_sent",
+			"formattedMsg": null
+		};
+	};
+	
+	/* 
+	 * Workflow step: publishes an instruction on the IoT platform informing all door controllers to lock doors
+	 * This method can throw an exception
+	 * @method notifyAllDoorsToLock
+	 * @param {Object} request: Apstrative native request object, the request that triggered the execution of the script
+	 * @return {Object} {
+	 * 		{String} stepResult: the outcome of the execution of the current step
+	 *		{String} renderedMsg: a formatted message, if any
+	 * 	}
+	 */
+	IntrusionManagementProcess.prototype.notifyAllDoorsToLock = function(request) {
+	
+		var wotIoWrapperModule = this.apsdb.require("apstrata.wotio.WotIoWrapperModule");
+		var wotIoWrapper = new wotIoWrapperModule.WotIoWrapper(this.apsdb);
+		var publishDTO = {
+		
+			"message": "A breaking in attemps was detected and confirmed",
+			"sinkId": this.utilities.wotSink
+		};
+		
+		wotIoWrapper.publish(publishDTO);
+		return {
+		
+			 "stepResult": "close_doors_instruction_published",
+			 "formattedMsg": "<html><body><b>Instruction sent to close all doors</b></body></html>"
+		}
+	};
+	
+	/* 
+	 * Workflow step: send an email to the user specified in the configuration, to confirm that the alert was discarded
+	 * This method can throw an exception
+	 * @method sendDiscardConfirmation
+	 * @param {Object} request: Apstrative native request object, the request that triggered the execution of the script
+	 * @return {Object} {
+	 * 		{String} stepResult: the outcome of the execution of the current step
+	 *		{String} renderedMsg: a formatted message, if any
+	 * 	}
+	 */
+	IntrusionManagementProcess.prototype.sendDiscardConfirmation = function(request) {
+	
+		// Retrieve part of the profile of the user to notify, using the username specified in the configuration
+		var userToNotify = this.utilities.getUser(this.config.userToNotify);
+		
+		// Extract user info from the request in order to retrieve the auth key of the current Apstrata application
+		var userWhoSentTheRequest = this.utilities.parseUserFromRequest(request);
+		var emailParams = {
+		
+			"to": userToNotify.email,
+			"htmlBody": "<b>You discarded the intrusion alert</b>",
+			"subject": "Breaking in notification - alert discarded"
+		};
+		
+		this.utilities.sendEmail(emailParams);
+		return {
+			
+			"stepResult": "email_sent",
+			"formattedMsg": "<html><body><b>The alert was discarded</b></body></html>"
+		};
+	};
+	
+	/*
+	 * Utility method: builds an HTML message to be sent by email to the user, informing him about the breaking in attempts
+	 * The email contains two links, one to confirm the breaking in attemps, the other to discard it
+	 * The links refer to the "apstrata.kinoma.api.HandleIntrusionManagement" script and are signed with an authentication token
+	 * that expires after this.TOKEN_EXPIRES seconds
+	 * @method _buildNotificationMessage
+	 * @param {Object} user: the targetted user object (login, email}
+	 * @param {String} authKey: the authentication key of the current Apstrata application
+	 * @param {String} location: the door controller location where the intrusion occurred
+	 * @return {String} the HTML notification string
+	 */
+	IntrusionManagementProcess.prototype._buildNotificationMessage = function(user, authKey, location) {
+		
+		var currentDate = new Date();	
+		var currentTime = this.utilities.buildTimeString(currentDate);
+		var text = "An breaking in attempt has been detected at your home (" + location + ") at " +  currentTime + "<br>";
+		var tokenConfig = {
+		
+			"login": user.login,
+			"expiresAfter": this.config.tokenExpiration
+		};
+		
+		var token = this.utilities.generateAuthenticationToken(tokenConfig);
+		var url = "https://sandbox.apstrata.com/apsdb/rest/" + authKey + "/RunScript?apsws.time=" + currentDate.getTime();
+		url = url + "&apsdb.scriptName=apstrata.kinoma.api.HandleIntrusionManagement&apsws.responseType=jsoncdp&apsdb.authToken=" + token;
+		url = url + "&apsws.user=" + user.login;
+		var confirmLink = "<a href=\"" + url + "&event=" + Object.keys(this.workflowSteps)[1] + "\">Confirm</a>&nbsp";
+		var discardLink = "<a href=\"" + url + "&event=" + Object.keys(this.workflowSteps)[2] + "\">Discard</a>";
+		return text + confirmLink + discardLink;
+	};
+]]>
+</code>
+</script>

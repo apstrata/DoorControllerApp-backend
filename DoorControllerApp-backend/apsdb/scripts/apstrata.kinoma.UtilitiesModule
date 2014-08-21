@@ -1,0 +1,130 @@
+<script>
+<scriptACL>
+     <execute>authenticated-users</execute>
+     <read>nobody</read>
+     <write>nobody</write>
+</scriptACL>
+<code><![CDATA[
+
+	/*
+	 * Class that provides utility methods to the business classes
+	 * @class Utilities
+	 * @constructor Utilities
+	 */
+	function Utilities(apsdb) {
+		this.apsdb = apsdb;
+	};
+	
+	/*
+	 * Retrieves the email from the profile of the user with the provided username, using Apstrata's GetUser API
+	 * This function throws an exception in case the user was not found or in case of an error
+	 * @method getUser
+	 * @param {String} username: the login of the user
+	 * @return {Object} user and account info {login, email}
+	 */
+	Utilities.prototype.getUser = function(username) {
+		
+		// retrieve the user's email from his Apstrata profile
+		var response = this.apsdb.callApi("GetUser", {"login": username}, null);
+		
+		// if no matching profile found or another error occured, throw error as exception
+		if (response.metadata.status == "failure") {
+			throw response.metadata;
+		}
+		
+		return {
+		
+			"login": username,
+			"email": response.result.user.email
+		};
+	};
+	
+	/*
+	 * Sends an email using Apstrata's SendEmail API
+	 * @method sendEmail
+	 * @param {Object} the email parameters {to, htmlBody, subject}
+	 * @return {String} the HTML notification string
+	 */
+	Utilities.prototype.sendEmail = function(emailParams) {
+	
+		// Prepare the parameters to send an email then invoke the SendEmail API on Apstrata
+		var params = {
+		
+			"apsma.to": emailParams.to,
+			"apsma.htmlBody": emailParams.htmlBody,
+			"apsma.subject": emailParams.subject
+		};	
+	
+		var response = this.apsdb.callApi("SendEmail", params, null);
+		
+		// If failure, throw the response metadata as exeption, otherwise return successfuly
+		if (response.metadata.status == "failure") {
+			throw response.metadata;
+		}
+	};
+	
+	/*
+	 * Generates a temporary authentication token for the current user using Apstrat's VerifyCredentials API
+	 * This method can throw an exception
+	 * @method _generateAuthenticationToken
+	 * @param {Object} tokenConfig: {login, expiresAfter}
+	 * @return {String} a temporary authentication token
+	 */
+	Utilities.prototype.generateAuthenticationToken = function(tokenConfig) {
+	
+		var params = {
+		
+			"apsdb.runAs": tokenConfig.login,
+			"apsdb.action": "generate",
+			"apsdb.tokenExpires": tokenConfig.expiresAfter,
+			"apsdb.tokenLifetime": tokenConfig.expiresAfter,
+			"apsdb.bindReferrer": "false" // Don't forget to configure your Apstrata application to allow not binding to referrer
+		}
+		
+		var response = this.apsdb.callApi("VerifyCredentials", params, null);
+		if (response.metadata.status == "failure") {
+			throw response.metadata;
+		}
+		
+		return response.result["apsdb.authToken"];
+	}
+	
+	/*
+	 * Generates a string in the following format "hh:mm:ss" from the date parameter
+	 * @method _buildTimeString
+	 * @param {Date} dateObj
+	 * @return {String} a string that represent the time of the date parameter ("hh:mm:ss")
+	 */
+	Utilities.prototype.buildTimeString = function(dateObj) {
+	
+		var hour = dateObj.getHours();
+		var minutes = dateObj.getMinutes();
+		var seconds = dateObj.getSeconds();
+		return hour + ":" + minutes + ":" + seconds;
+	};
+	
+	/*
+	 * Utility method: extracts user login and application's authentication key from a request
+	 * @method parseUserFromRequest
+	 * @param {Object} request: the Apstrata native request object
+	 * @return {Object} user and account info {login, email, authKey}
+	 */
+	Utilities.prototype.parseUserFromRequest = function(request) {
+	
+		// Get user login from request
+		var user = request.user.login;
+		
+		// remove @<authKey> from user login obtained from request
+		// if login value is an email, make sure not to remove the @email
+		var atIndex = (user.indexOf("@") == user.lastIndexOf("@")) ? user.indexOf("@") : user.lastIndexOf("@");
+		var login = user.substring(0, atIndex);
+		var authKey = user.substring(atIndex + 1);
+		return {
+			
+			"login": login,
+			"authKey": authKey
+		}	
+	}
+]]>
+</code>
+</script>
