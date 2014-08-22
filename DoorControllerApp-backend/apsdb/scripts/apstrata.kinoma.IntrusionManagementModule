@@ -190,7 +190,7 @@
 		
 		var currentDate = new Date();	
 		var currentTime = this.utilities.buildTimeString(currentDate);
-		var text = "An breaking in attempt has been detected at your home (" + location + ") at " +  currentTime + "<br>";
+		var text = "A breaking in attempt has been detected at your home (" + location + ") at " +  currentTime + "<br>";
 		var tokenConfig = {
 		
 			"login": user.login,
