@@ -198,7 +198,7 @@
 		};
 		
 		var token = this.utilities.generateAuthenticationToken(tokenConfig);
-		var url = "https://sandbox.apstrata.com/apsdb/rest/" + authKey + "/RunScript?apsws.time=" + currentDate.getTime();
+		var url = this.utilities.url + authKey + "/RunScript?apsws.time=" + currentDate.getTime();
 		url = url + "&apsdb.scriptName=apstrata.kinoma.api.HandleIntrusionManagement&apsws.responseType=jsoncdp&apsdb.authToken=" + token;
 		url = url + "&apsws.user=" + user.login;
 		var confirmLink = "<a href=\"" + url + "&event=" + Object.keys(this.workflowSteps)[1] + "\">Confirm</a>&nbsp";
